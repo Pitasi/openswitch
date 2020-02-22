@@ -48,7 +48,7 @@ func TestRunWithContext(t *testing.T) {
 	assert.False(s.hasStarted())
 	assert.False(s.hasStopped())
 	RunWithContext(ctx, s)
-	time.Sleep(1 * time.Millisecond) // ensure goroutine has started
+	time.Sleep(10 * time.Millisecond) // ensure goroutine has started
 	assert.True(s.hasStarted())
 	assert.False(s.hasStopped())
 	cancel()
@@ -64,7 +64,7 @@ func TestWaitEmpty(t *testing.T) {
 	}()
 	select {
 	case <-c:
-	case <-time.After(1 * time.Millisecond):
+	case <-time.After(10 * time.Millisecond):
 		t.Fatal("Wait() did not return immediately")
 	}
 }
@@ -90,7 +90,7 @@ func TestWait(t *testing.T) {
 	// check whether Wait() is taking more than 2ms
 	select {
 	case <-c:
-	case <-time.After(2 * time.Millisecond):
+	case <-time.After(5 * time.Millisecond):
 		t.Fatal("Wait() is taking too long")
 	}
 }
@@ -100,7 +100,7 @@ func TestRunSIGINT(t *testing.T) {
 	s := &SimpleTask{}
 	Run(s)
 	syscall.Kill(syscall.Getpid(), syscall.SIGINT)
-	time.Sleep(1 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	assert.True(s.hasStopped())
 }
 
@@ -109,6 +109,6 @@ func TestRunSIGTERM(t *testing.T) {
 	s := &SimpleTask{}
 	Run(s)
 	syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
-	time.Sleep(1 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 	assert.True(s.hasStopped())
 }
