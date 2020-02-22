@@ -1,0 +1,4 @@
+language: go
+
+go:
+    script: go test -v ./...
