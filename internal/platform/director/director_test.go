@@ -2,6 +2,7 @@ package director
 
 import (
 	"context"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -10,16 +11,33 @@ import (
 )
 
 type SimpleTask struct {
+	sync.Mutex
 	started bool
 	stopped bool
 }
 
 func (t *SimpleTask) Start() {
+	t.Lock()
+	defer t.Unlock()
 	t.started = true
 }
 
 func (t *SimpleTask) Stop() {
+	t.Lock()
+	defer t.Unlock()
 	t.stopped = true
+}
+
+func (t *SimpleTask) hasStarted() bool {
+	t.Lock()
+	defer t.Unlock()
+	return t.started
+}
+
+func (t *SimpleTask) hasStopped() bool {
+	t.Lock()
+	defer t.Unlock()
+	return t.stopped
 }
 
 func TestRunWithContext(t *testing.T) {
@@ -27,15 +45,15 @@ func TestRunWithContext(t *testing.T) {
 	s := &SimpleTask{}
 	ctx, cancel := context.WithCancel(context.Background())
 
-	assert.False(s.started)
-	assert.False(s.stopped)
+	assert.False(s.hasStarted())
+	assert.False(s.hasStopped())
 	RunWithContext(ctx, s)
 	time.Sleep(1 * time.Millisecond) // ensure goroutine has started
-	assert.True(s.started)
-	assert.False(s.stopped)
+	assert.True(s.hasStarted())
+	assert.False(s.hasStopped())
 	cancel()
 	Wait()
-	assert.True(s.stopped)
+	assert.True(s.hasStopped())
 }
 
 func TestWaitEmpty(t *testing.T) {
@@ -83,7 +101,7 @@ func TestRunSIGINT(t *testing.T) {
 	Run(s)
 	syscall.Kill(syscall.Getpid(), syscall.SIGINT)
 	time.Sleep(1 * time.Millisecond)
-	assert.True(s.stopped)
+	assert.True(s.hasStopped())
 }
 
 func TestRunSIGTERM(t *testing.T) {
@@ -92,5 +110,5 @@ func TestRunSIGTERM(t *testing.T) {
 	Run(s)
 	syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
 	time.Sleep(1 * time.Millisecond)
-	assert.True(s.stopped)
+	assert.True(s.hasStopped())
 }

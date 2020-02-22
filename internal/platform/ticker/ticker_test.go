@@ -2,16 +2,28 @@ package ticker
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-type counter int64
+type counter struct {
+	sync.Mutex
+	val int64
+}
 
 func (c *counter) inc(t time.Time) {
-	(*c)++
+	c.Lock()
+	defer c.Unlock()
+	(c.val)++
+}
+
+func (c *counter) get() int64 {
+	c.Lock()
+	defer c.Unlock()
+	return c.val
 }
 
 func TestPeriodicTask(t *testing.T) {
@@ -44,8 +56,8 @@ func TestPeriodicTask(t *testing.T) {
 			cancel()
 
 			// we assume that count can be +/-1 because of many factors
-			assert.GreaterOrEqual(int64(c), expectedCount-1)
-			assert.LessOrEqual(int64(c), expectedCount+1)
+			assert.GreaterOrEqual(c.get(), expectedCount-1)
+			assert.LessOrEqual(c.get(), expectedCount+1)
 		})
 	}
 
@@ -60,5 +72,5 @@ func TestRunAtLeastOnce(t *testing.T) {
 	time.Sleep(1 * time.Millisecond) // ensure goroutine run
 	cancel()
 
-	assert.Equal(1, int(c))
+	assert.EqualValues(1, c.get())
 }
