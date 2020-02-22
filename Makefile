@@ -10,6 +10,11 @@ build: clean
 	go build -ldflags '-X main.Version=v$(VERSION)' -o bin/$(APP) $(MODULE)
 
 
+.PHONY: get
+## get: runs go get
+get:
+	go get ./...
+
 .PHONY: run
 ## run: runs go run main.go
 run:
@@ -23,7 +28,7 @@ clean:
 
 .PHONY: test
 ## test: runs go test with default values
-test:
+test: get
 	go test -v -count=1 -race ./...
 
 .PHONY: setup
