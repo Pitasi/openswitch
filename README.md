@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.com/Pitasi/openswitch.svg?branch=master)](https://travis-ci.com/Pitasi/openswitch)
+[![Build Status](https://travis-ci.com/Pitasi/openswitch.svg?branch=develop)](https://travis-ci.com/Pitasi/openswitch)
 
 # OpenSwitch
 
