@@ -6,9 +6,29 @@ package eshop
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 )
+
+func NSUID(game interface{}) (string, error) {
+	switch g := game.(type) {
+	case EuropeanGame:
+		if len(g.NsuidTxt) == 0 {
+			return "", fmt.Errorf("no NSUIDs for the game")
+		}
+		return g.NsuidTxt[0], nil
+
+	case AmericanGame:
+		return g.Nsuid, nil
+
+	case AsianGame:
+		// TODO: use a regex to extract it from g.LinkURL
+		return "", fmt.Errorf("not implemented")
+	}
+
+	panic(fmt.Errorf("invalid game type"))
+}
 
 // EuropeGames calls Nintendo API to fetch a list of all games for the European
 // region.
