@@ -1,4 +1,4 @@
-package eshop
+package main
 
 import (
 	"testing"
