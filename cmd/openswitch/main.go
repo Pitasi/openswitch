@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/Pitasi/openswitch/internal/platform/director"
+	"github.com/Pitasi/openswitch/internal/director"
 )
 
 func main() {
