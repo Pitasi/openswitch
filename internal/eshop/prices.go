@@ -1,25 +1,92 @@
 package eshop
 
 import (
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
+	"time"
 )
 
-var (
-	priceURL   = "https://api.ec.nintendo.com/v1/price"
-	priceLimit = 50
-)
+var maxPageSize = 50
 
-type Price struct{}
+type APIPrice struct {
+	// SalesStatus says if the game is available to buy:
+	// Currently known values:
+	// "onsale":     available to buy
+	// "unreleased": not available to buy, there are no prices yet
+	SalesStatus string `json:"sales_status"`
 
-// paginated
-func Prices(country string, nsuids []string) ([]*Price, error) {
-	pages := [][]string{nsuids} // TODO: paginate nsuids every priceLimit elements
+	// TitleID is the NSUID of the game
+	TitleID int `json:"title_id"`
 
-	results := make([]*Price, 0, len(nsuids))
+	// RegularPrice
+	RegularPrice APIRegularPrice `json:"regular_price"`
+
+	DiscountPrice APIDiscountPrice `json:"discount_price"`
+}
+
+// IsOnSale returns true if the game is available to buy and has a
+// RegularPrice.
+func (p *APIPrice) IsOnSale() bool {
+	return p.SalesStatus == "onsale"
+}
+
+// IsDiscounted returns true if there's a discount for the game, and has a
+// DiscountPrice.
+func (p *APIPrice) IsDiscounted() bool {
+	return p.DiscountPrice.StartDatetime.IsZero()
+}
+
+type APIRegularPrice struct {
+	// Amount is the price combined with the currency symbol.
+	// E.g. "39.99 €"
+	Amount string `json:"amount"`
+
+	// Currency is the three-characters name of the currency being used.
+	// E.g. "EUR"
+	Currency string `json:"currency"`
+
+	// RawValue is a string representation of the price.
+	// E.g. "39.99"
+	RawValue string `json:"raw_value"`
+}
+
+type APIDiscountPrice struct {
+	APIRegularPrice
+	StartDatetime time.Time
+	EndDatetime   time.Time
+}
+
+type APIPriceResponse struct {
+	Country      string
+	Personalized bool
+	Prices       []APIPrice
+
+	// Error is set when something "bad" happened.
+	Error *APIError `json:"error"`
+}
+
+type APIError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+func (e APIError) Error() string {
+	return fmt.Sprintf("API Error: code=%s, message=%s", e.Code, e.Message)
+}
+
+// Prices executes several calls to Nintendo API for fetching prices related
+// to requested NSUIDs. Each call to the API can retrieve up to `maxPageSize`
+// results.
+func Prices(country string, nsuids []string) ([]APIPrice, error) {
+	country = strings.ToUpper(country)
+	pages := splitIntoPages(nsuids, maxPageSize)
+
+	results := make([]APIPrice, 0, len(nsuids))
 	for _, page := range pages {
 		prices, err := doPriceRequest(country, page)
 		if err != nil {
@@ -31,16 +98,21 @@ func Prices(country string, nsuids []string) ([]*Price, error) {
 	return results, nil
 }
 
-// single page
-func doPriceRequest(country string, nsuids []string) ([]*Price, error) {
+// doPriceRequest executes a single request to Nintendo API for fetching
+// prices. Length of nsuids must not exceed `maxPageSize`.
+func doPriceRequest(country string, nsuids []string) ([]APIPrice, error) {
+	if len(nsuids) > maxPageSize {
+		return nil, fmt.Errorf("requested %d prices but maximum is %d", len(nsuids), maxPageSize)
+	}
+
 	u := url.URL{
 		Scheme: "https",
 		Host:   "api.ec.nintendo.com",
 		Path:   "v1/price",
 		RawQuery: url.Values{
 			"country": []string{country},
-			"ids":     nsuids,
-			"limit":   []string{strconv.Itoa(priceLimit)},
+			"ids":     []string{strings.Join(nsuids, ",")},
+			"limit":   []string{strconv.Itoa(maxPageSize)},
 			"lang":    []string{"en"},
 		}.Encode(),
 	}
@@ -55,7 +127,37 @@ func doPriceRequest(country string, nsuids []string) ([]*Price, error) {
 		return nil, err
 	}
 
-	b, _ := ioutil.ReadAll(res.Body)
-	fmt.Println(string(b))
-	return nil, nil
+	price := new(APIPriceResponse)
+	err = json.NewDecoder(res.Body).Decode(price)
+	if err != nil {
+		return nil, err
+	}
+	if price.Error != nil {
+		return nil, price.Error
+	}
+
+	return price.Prices, nil
+}
+
+func splitIntoPages(l []string, pageSize int) [][]string {
+	if len(l) == 0 || pageSize <= 0 {
+		return nil
+	}
+
+	if pageSize > len(l) {
+		return [][]string{l}
+	}
+
+	nPages := int(math.Ceil(float64(len(l)) / float64(pageSize)))
+	pages := make([][]string, nPages)
+
+	for i := 0; i < nPages; i++ {
+		bound := (i + 1) * pageSize
+		if bound > len(l) {
+			bound = len(l)
+		}
+		pages[i] = l[i*pageSize : bound]
+	}
+
+	return pages
 }
