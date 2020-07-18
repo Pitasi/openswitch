@@ -55,8 +55,8 @@ func updateList() error {
 	return nil
 }
 
-func fetchAllPrices(games []EuropeanGame) ([][]eshop.Price, error) {
-	return make([][]eshop.Price, len(games)), nil
+func fetchAllPrices(games []EuropeanGame) ([][]eshop.APIPrice, error) {
+	return make([][]eshop.APIPrice, len(games)), nil
 }
 
 func sendList(w http.ResponseWriter, req *http.Request) {

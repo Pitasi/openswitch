@@ -11,7 +11,7 @@ type List struct {
 	Items     []*OutputGame
 }
 
-func NewList(games []EuropeanGame, prices [][]eshop.Price) *List {
+func NewList(games []EuropeanGame, prices [][]eshop.APIPrice) *List {
 	outGames := make([]*OutputGame, len(games))
 	for i, g := range games {
 		outGames[i] = NewOutputGame(g, prices[i])
@@ -32,7 +32,7 @@ type OutputGame struct {
 	}
 }
 
-func NewOutputGame(g EuropeanGame, p []eshop.Price) *OutputGame {
+func NewOutputGame(g EuropeanGame, p []eshop.APIPrice) *OutputGame {
 	return &OutputGame{
 		Title: g.Title,
 	}
