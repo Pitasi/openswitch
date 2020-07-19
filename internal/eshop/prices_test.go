@@ -1,6 +1,7 @@
 package eshop
 
 import (
+	"log"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,6 +13,7 @@ func TestGetPrice(t *testing.T) {
 	assert.NoError(err)
 	assert.Len(res, 1)
 	assert.Equal(70010000000184, res[0].TitleID)
+	log.Println(res[0].BuyLink)
 }
 
 func TestSplitIntoPages(t *testing.T) {

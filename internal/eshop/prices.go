@@ -18,15 +18,27 @@ type APIPrice struct {
 	// Currently known values:
 	// "onsale":     available to buy
 	// "unreleased": not available to buy, there are no prices yet
+	// "not_found":  the game is not available in the requested region
 	SalesStatus string `json:"sales_status"`
 
 	// TitleID is the NSUID of the game
 	TitleID int `json:"title_id"`
 
-	// RegularPrice
+	// RegularPrice is the price for this game.
+	// It can be empty if the game hasn't been released yet, use IsOnSale() to
+	// check.
 	RegularPrice APIRegularPrice `json:"regular_price"`
 
+	// DiscountPrice is the discounted price for this game.
+	// It is empty if there are no ongoing discounts, use IsDiscounted() to
+	// check.
 	DiscountPrice APIDiscountPrice `json:"discount_price"`
+
+	// BuyLink is the full address to buy the game at the price listed.
+	//
+	// Note: this field is not actual part of the API response, it's generated
+	// by this package for convenience.
+	BuyLink string `json:"buy_link"`
 }
 
 // IsOnSale returns true if the game is available to buy and has a
@@ -64,7 +76,7 @@ type APIDiscountPrice struct {
 type APIPriceResponse struct {
 	Country      string
 	Personalized bool
-	Prices       []APIPrice
+	Prices       []*APIPrice
 
 	// Error is set when something "bad" happened.
 	Error *APIError `json:"error"`
@@ -82,11 +94,11 @@ func (e APIError) Error() string {
 // Prices executes several calls to Nintendo API for fetching prices related
 // to requested NSUIDs. Each call to the API can retrieve up to `maxPageSize`
 // results.
-func Prices(country string, nsuids []string) ([]APIPrice, error) {
+func Prices(country string, nsuids []string) ([]*APIPrice, error) {
 	country = strings.ToUpper(country)
 	pages := splitIntoPages(nsuids, maxPageSize)
 
-	results := make([]APIPrice, 0, len(nsuids))
+	results := make([]*APIPrice, 0, len(nsuids))
 	for _, page := range pages {
 		prices, err := doPriceRequest(country, page)
 		if err != nil {
@@ -95,12 +107,14 @@ func Prices(country string, nsuids []string) ([]APIPrice, error) {
 		results = append(results, prices...)
 	}
 
+	fillLinkURLs(country, results)
+
 	return results, nil
 }
 
 // doPriceRequest executes a single request to Nintendo API for fetching
 // prices. Length of nsuids must not exceed `maxPageSize`.
-func doPriceRequest(country string, nsuids []string) ([]APIPrice, error) {
+func doPriceRequest(country string, nsuids []string) ([]*APIPrice, error) {
 	if len(nsuids) > maxPageSize {
 		return nil, fmt.Errorf("requested %d prices but maximum is %d", len(nsuids), maxPageSize)
 	}
@@ -160,4 +174,11 @@ func splitIntoPages(l []string, pageSize int) [][]string {
 	}
 
 	return pages
+}
+
+func fillLinkURLs(country string, res []*APIPrice) {
+	format := "https://ec.nintendo.com/%s/en/titles/%d"
+	for _, p := range res {
+		p.BuyLink = fmt.Sprintf(format, country, p.TitleID)
+	}
 }
