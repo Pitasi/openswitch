@@ -1,6 +1,7 @@
 package eshop
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -9,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Pitasi/openswitch/internal/httpclient"
 )
 
 var maxPageSize = 50
@@ -50,7 +53,7 @@ func (p *APIPrice) IsOnSale() bool {
 // IsDiscounted returns true if there's a discount for the game, and has a
 // DiscountPrice.
 func (p *APIPrice) IsDiscounted() bool {
-	return p.DiscountPrice.StartDatetime.IsZero()
+	return !p.DiscountPrice.StartDatetime.IsZero()
 }
 
 type APIRegularPrice struct {
@@ -78,7 +81,6 @@ type APIPriceResponse struct {
 	Personalized bool
 	Prices       []*APIPrice
 
-	// Error is set when something "bad" happened.
 	Error *APIError `json:"error"`
 }
 
@@ -94,13 +96,15 @@ func (e APIError) Error() string {
 // Prices executes several calls to Nintendo API for fetching prices related
 // to requested NSUIDs. Each call to the API can retrieve up to `maxPageSize`
 // results.
-func Prices(country string, nsuids []string) ([]*APIPrice, error) {
+//
+// The returned map maps each nsuid to the corresponding APIPriceResponse.
+func Prices(ctx context.Context, country string, nsuids []string) (map[string]*APIPrice, error) {
 	country = strings.ToUpper(country)
 	pages := splitIntoPages(nsuids, maxPageSize)
 
 	results := make([]*APIPrice, 0, len(nsuids))
 	for _, page := range pages {
-		prices, err := doPriceRequest(country, page)
+		prices, err := doPriceRequest(ctx, country, page)
 		if err != nil {
 			return nil, err
 		}
@@ -108,13 +112,13 @@ func Prices(country string, nsuids []string) ([]*APIPrice, error) {
 	}
 
 	fillLinkURLs(country, results)
-
-	return results, nil
+	resultsMap := sliceToMap(results)
+	return resultsMap, nil
 }
 
 // doPriceRequest executes a single request to Nintendo API for fetching
 // prices. Length of nsuids must not exceed `maxPageSize`.
-func doPriceRequest(country string, nsuids []string) ([]*APIPrice, error) {
+func doPriceRequest(ctx context.Context, country string, nsuids []string) ([]*APIPrice, error) {
 	if len(nsuids) > maxPageSize {
 		return nil, fmt.Errorf("requested %d prices but maximum is %d", len(nsuids), maxPageSize)
 	}
@@ -135,8 +139,9 @@ func doPriceRequest(country string, nsuids []string) ([]*APIPrice, error) {
 	if err != nil {
 		return nil, err
 	}
+	req = req.WithContext(ctx)
 
-	res, err := c.Do(req)
+	res, err := httpclient.New(10*time.Second, 5).Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -181,4 +186,12 @@ func fillLinkURLs(country string, res []*APIPrice) {
 	for _, p := range res {
 		p.BuyLink = fmt.Sprintf(format, country, p.TitleID)
 	}
+}
+
+func sliceToMap(p []*APIPrice) map[string]*APIPrice {
+	m := make(map[string]*APIPrice)
+	for _, pp := range p {
+		m[strconv.Itoa(pp.TitleID)] = pp
+	}
+	return m
 }

@@ -1,12 +1,155 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
+
+	"github.com/Pitasi/openswitch/internal/eshop"
+	"github.com/Pitasi/openswitch/internal/httpclient"
+	"github.com/sirupsen/logrus"
 )
+
+type EuropeanEshop struct {
+	countries []string
+	log       *logrus.Entry
+}
+
+func NewEuropeanEshop(countries []string) *EuropeanEshop {
+	return &EuropeanEshop{
+		countries: countries,
+		log:       logrus.New().WithField("ID", "eshop-eu"),
+	}
+}
+
+func (es *EuropeanEshop) ID() string {
+	return fmt.Sprintf("eshop-eu")
+}
+
+func (es *EuropeanEshop) Provide(ctx context.Context) ([]Game, error) {
+	es.log.Info("Provider starts")
+
+	games, err := europeFetchGames(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("fetching games: %w", err)
+	}
+
+	nsuids := europeNsuids(games)
+
+	// map id->games
+	m := make(map[string]*Game)
+	for _, eg := range games {
+		g := es.adaptGame(eg)
+		m[g.ProviderGameID] = g
+	}
+
+	// fetch price for country
+	for i, country := range es.countries {
+		es.log.Infof("Fetch for %s (%d/%d)", country, i+1, len(es.countries))
+
+		prices, err := eshop.Prices(ctx, country, nsuids)
+		if err != nil {
+			return nil, fmt.Errorf("fetching prices for %s: %w", country, err)
+		}
+
+		// add country offer to games
+		for id, g := range m {
+			p, found := prices[id]
+			if !found {
+				continue
+			}
+			offer, err := es.adaptPrice(country, p)
+			if err != nil {
+				es.log.Warn("invalid offer: %v\n", err)
+				continue
+			}
+			if offer == nil {
+				continue
+			}
+
+			g.AddOffer(*offer)
+		}
+	}
+
+	// m to slice
+	gamesWithOffers := make([]Game, 0, len(m))
+	for _, g := range m {
+		gamesWithOffers = append(gamesWithOffers, *g)
+	}
+
+	es.log.Infof("Done. Fetched %d games.", len(gamesWithOffers))
+
+	return gamesWithOffers, nil
+}
+
+func (es *EuropeanEshop) adaptGame(g EuropeanGame) *Game {
+	id, err := g.NSUID()
+	if err != nil {
+		id = g.Title
+	}
+	return &Game{
+		ProviderID:     es.ID(),
+		ProviderGameID: id,
+
+		Title:       g.Title,
+		Description: g.Excerpt,
+		ImageURL:    g.ImageURL,
+	}
+}
+
+func (es *EuropeanEshop) adaptPrice(country string, p *eshop.APIPrice) (*Offer, error) {
+	if !p.IsOnSale() {
+		return nil, nil
+	}
+
+	regular, err := strconv.ParseFloat(p.RegularPrice.RawValue, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	discounted := 0.
+	var (
+		discountStart *time.Time
+		discountEnd   *time.Time
+	)
+	if p.IsDiscounted() {
+		discounted, err = strconv.ParseFloat(p.DiscountPrice.RawValue, 32)
+		if err != nil {
+			return nil, err
+		}
+
+		discountStart = &p.DiscountPrice.StartDatetime
+		discountEnd = &p.DiscountPrice.EndDatetime
+	}
+
+	// TODO: convert regular and discounted to EUR
+
+	return &Offer{
+		ProviderID:    fmt.Sprintf("%s-%s", es.ID(), country),
+		BuyLink:       p.BuyLink,
+		RegularPrice:  float32(regular),
+		DiscountStart: discountStart,
+		DiscountEnd:   discountEnd,
+		DiscountPrice: float32(discounted),
+	}, nil
+}
+
+func europeNsuids(games []EuropeanGame) []string {
+	nsuids := make([]string, 0, len(games))
+	for _, g := range games {
+		nsuid, err := g.NSUID()
+		if err != nil {
+			log.Printf("no nsuid for %s, skipping price fetch\n", g.Title)
+		}
+		nsuids = append(nsuids, nsuid)
+	}
+	return nsuids
+}
 
 // EuropeanGame is the struct returned by the EU API for each game.
 //
@@ -82,9 +225,7 @@ func (g *EuropeanGame) NSUID() (string, error) {
 	return g.NsuidTxt[0], nil
 }
 
-// EuropeGames calls Nintendo API to fetch a list of all games available in
-// Europe.
-func EuropeGames() ([]EuropeanGame, error) {
+func europeFetchGames(ctx context.Context) ([]EuropeanGame, error) {
 	u := url.URL{
 		Scheme: "http",
 		Host:   "search.nintendo-europe.com",
@@ -103,8 +244,9 @@ func EuropeGames() ([]EuropeanGame, error) {
 	if err != nil {
 		return nil, err
 	}
+	req = req.WithContext(ctx)
 
-	res, err := httpClient.Do(req)
+	res, err := httpclient.New(10*time.Second, 5).Do(req)
 	if err != nil {
 		return nil, err
 	}
