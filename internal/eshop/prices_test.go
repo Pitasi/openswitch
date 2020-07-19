@@ -1,19 +1,19 @@
 package eshop
 
 import (
-	"log"
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGetPrice(t *testing.T) {
-	res, err := Prices("IT", []string{"70010000000184"})
+	res, err := Prices(context.Background(), "IT", []string{"70010000000184"})
 	assert := assert.New(t)
 	assert.NoError(err)
 	assert.Len(res, 1)
-	assert.Equal(70010000000184, res[0].TitleID)
-	log.Println(res[0].BuyLink)
+	assert.Equal(70010000000184, res["70010000000184"].TitleID)
+	assert.NotEmpty(res["70010000000184"].BuyLink)
 }
 
 func TestSplitIntoPages(t *testing.T) {

@@ -65,7 +65,7 @@ func (es *EuropeanEshop) Provide(ctx context.Context) ([]Game, error) {
 			}
 			offer, err := es.adaptPrice(country, p)
 			if err != nil {
-				es.log.Warn("invalid offer: %v\n", err)
+				es.log.WithError(err).Warnf("invalid offer")
 				continue
 			}
 			if offer == nil {
