@@ -44,7 +44,7 @@ projects out there:
 - https://savecoins.app
 - https://eshop-prices.com
 
-Why am I still doing another one?
+So why am I still doing another one?
 
 I don't want to just build an app. I want to build a **community**, engaging
 users in different ways (e.g. ratings or reviews).
@@ -53,8 +53,9 @@ users in different ways (e.g. ratings or reviews).
 # Features wishlist
 
 - [x] Fetch games from EU eshops
-- [ ] Fetch prices from EU eshops
-- [ ] Basic frontend for price comparison
+- [x] Fetch prices from EU eshops
+- [ ] Database for storing games+prices
+- [ ] Basic frontend for price comparison (* this is where we are with https://esho.pw)
 - [ ] Price history with charts
 - [ ] Fetch games and prices from Americas' eshops
 - [ ] Review system (boolean "like" system, similar to Facebook)
