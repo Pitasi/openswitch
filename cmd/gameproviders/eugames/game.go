@@ -75,15 +75,15 @@ type EuropeanGame struct {
 	Popularity                       int         `json:"popularity"`
 }
 
-func NSUID(g EuropeanGame) (string, error) {
+func (g *EuropeanGame) NSUID() (string, error) {
 	if len(g.NsuidTxt) == 0 {
 		return "", fmt.Errorf("no NSUIDs for the game")
 	}
 	return g.NsuidTxt[0], nil
 }
 
-// EuropeGames calls Nintendo API to fetch a list of all games for the European
-// region.
+// EuropeGames calls Nintendo API to fetch a list of all games available in
+// Europe.
 func EuropeGames() ([]EuropeanGame, error) {
 	u := url.URL{
 		Scheme: "http",
