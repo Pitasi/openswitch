@@ -6,13 +6,37 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 )
 
 func main() {
 	greet()
 	ctx := withSignalHandler(context.Background())
-	NewUpdater().Start(ctx)
+
+	db, err := newDB("localhost", "5432", "postgres", "", "postgres")
+	if err != nil {
+		panic(err)
+	}
+
+	err = NewUpdater(db).Start(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	//NewAggregator().Start(ctx)
 	goodbye()
+}
+
+func newDB(host, port, user, password, dbname string) (*sqlx.DB, error) {
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
+	db, err := sqlx.Connect("postgres", connStr)
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
 }
 
 func greet() {

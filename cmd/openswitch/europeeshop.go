@@ -72,7 +72,7 @@ func (es *EuropeanEshop) Provide(ctx context.Context) ([]Game, error) {
 				continue
 			}
 
-			g.AddOffer(*offer)
+			g.AddOffer(offer)
 		}
 	}
 
